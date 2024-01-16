@@ -214,11 +214,15 @@ def delay(seconds):
 def loadPreviousDownloads():
     global Downloads
     import json
-    with open("metadata/downloads.json") as f:
-        try :
-            Downloads = json.load(f)
-        except Exception:
-            Downloads = None
+    try :
+        with open("metadata/downloads.json") as f:
+            try :
+                Downloads = json.load(f)
+            except Exception:
+                Downloads = None
+    except Exception:
+        Downloads = None
+        print("No previous downloads found.")
         
     if Downloads == None:
         Downloads = {}
