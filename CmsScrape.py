@@ -104,7 +104,7 @@ def getCourses():
 
 def downloadAllCourseFiles(coursebtn, coursecode):
     global Downloads
-    coursebtn.click()
+    coursebtn.click()  
     
     downloads = driver.find_elements(By.XPATH, 
                 "/html/body/form/div[3]/div[2]/div[2]/div/div/div/div[2]/div[*]/div[2]/div[3]/div[*]/div/div[3]/div[1]/a")
@@ -124,12 +124,7 @@ def downloadAllCourseFiles(coursebtn, coursecode):
 
     link = downloads[0].get_attribute('href')
    
-    import threading
     
-    booldict = {"stop" : False}
-    scrollthread = threading.Thread(target=keepScrollUntillFalse, args=(booldict,10,))
-    
-    scrollthread.start()
     # download course files:
     for i in range(0,len(downloads)):
         
@@ -150,9 +145,19 @@ def downloadAllCourseFiles(coursebtn, coursecode):
         if moveDndFile(oldname, filenames[i] +"."+ oldname.split(".")[1], coursecode) != -1 :
             Downloads[oldname] = filenames[i]+ "." + oldname.split(".")[1]
             saveDownloadsState()
+    
+    
+    import threading
+    
+    booldict = {"stop" : False}
+    scrollthread = threading.Thread(target=keepScrollUntillFalse, args=(booldict,10,))
+    
+    scrollthread.start()
+    delay(1)
     booldict['stop'] = True
     
     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    
 
   
 
