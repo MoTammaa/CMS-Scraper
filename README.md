@@ -50,9 +50,11 @@ pip install -r requirements.txt
 1. your username
 2. your password
 3. the **Microsoft Edge Webdriver** path without any qoutations ("."), and not ending in any slashes.
-4. the path of the courses folder that you will download the files to _(with the folders of the courses created)_, with the constraints of number `3`
+   - Note 1 : you can use the provided WebDriver in the project (but you need to have Microsoft Edge v120.0.2210.133)
+   - Note 2 : you can use your default one or download WebDriver corresponding to your Edge Version from [here](https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/?form=MA13LH), but you need to check the version of your _Edge_ in the About Page.
+4. the path of the courses folder that you will download the files to _(with the folders of the courses created)_, with the same constraints of number `3`.
 5. The default downloads folder in your PC, which is regularly the `Downloads` Folder in the C:.
-   - Note: if it is not and you don't know it, you can:
+   - Note: if it is not and you don't know the path, you can:
      1. run the `metadata/MicrosoftWebDriver.exe`.
      2. try to download and image/sound/video/Lecture from CMS/...etc from any website without the **Save as** dialog and,
      3. open the folder where it was downloaded and get its path.
