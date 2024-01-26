@@ -63,6 +63,7 @@ def getCourses():
     delay(1)
     
     loadPreviousDownloads()
+    olddownloads = Downloads.copy()
     
     def updateCoursesLinks():
     
@@ -98,7 +99,17 @@ def getCourses():
         
         update = updateCoursesLinks()
         courses = update[0]
-        coursecodes = update[1]                        
+        coursecodes = update[1]
+    with open("lastrunsummary.txt", "w") as f:
+        print("\n\n Summary - Downloaded: \n")
+        f.write("\n\n Summary - Downloaded: \n")
+
+        for key in Downloads:
+            if key not in olddownloads:
+                print("*-", Downloads[key])
+                f.write("*- "+ Downloads[key] + "\n")
+        print("\n.....\n\nDone!")
+        f.write("\n.....\n\nDone!")                   
     
     
 
