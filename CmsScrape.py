@@ -18,6 +18,7 @@ scrape_url = ""
 cms = 'cms.guc.edu.eg/apps/student/HomePageStn.aspx'
 CoursesDirectory = ""
 DefaultDownloadsInC = ""
+NewDownloads = {}
 
 
 def check_updates():
@@ -54,12 +55,12 @@ def check_updates():
 
 
 def getCourses():
-    global scrape_url
+    global scrape_url, driver, Downloads, NewDownloads
 
     delay(1)
 
     loadPreviousDownloads()
-    olddownloads = Downloads.copy()
+    # olddownloads = Downloads.copy()
 
     def updateCoursesLinks():
 
@@ -101,16 +102,16 @@ def getCourses():
         print("\n\n Summary - Downloaded: \n")
         f.write("\n\n Summary - Downloaded: \n")
 
-        for key in Downloads:
-            if key not in olddownloads:
-                print("*-", Downloads[key])
-                f.write("*- " + Downloads[key] + "\n")
+        for key in NewDownloads:
+            # if key not in olddownloads:
+            print("*-", NewDownloads[key])
+            f.write("*- " + NewDownloads[key] + "\n")
         print("\n.....\n\nDone!")
         f.write("\n.....\n\nDone!")
 
 
 def downloadAllCourseFiles(coursebtn, coursecode, courseprefix):
-    global Downloads
+    global Downloads, NewDownloads, driver
     coursebtn.click()
 
     downloads = driver.find_elements(By.XPATH,
@@ -148,6 +149,8 @@ def downloadAllCourseFiles(coursebtn, coursecode, courseprefix):
         if moveDndFile(oldname, filenames[i] + "." + oldname.split(".")[-1], coursecode, courseprefix) != -1:
             Downloads[oldname] = filenames[i] + "." + oldname.split(".")[-1]
             saveDownloadsState()
+        NewDownloads[oldname] = courseprefix + coursecode + \
+            "-> " + filenames[i] + "." + oldname.split(".")[-1]
 
     import threading
 
