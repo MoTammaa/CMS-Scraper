@@ -125,10 +125,7 @@ def downloadAllCourseFiles(coursebtn, coursecode, courseprefix):
     #     return True
 
     for i in range(0, len(filenames)):
-        filenames[i] = filenames[i].text if "-" not in filenames[i].text else filenames[i].text.split("-")[
-            1]
-        filenames[i] = filenames[i] if not filenames[i].startswith(
-            " ") else filenames[i][1:]
+        filenames[i] = fix_filename(filenames[i].text)
 
     # link = downloads[0].get_attribute('href')
 
@@ -141,14 +138,15 @@ def downloadAllCourseFiles(coursebtn, coursecode, courseprefix):
 
         print("downloading files ", (i+1), "/", len(downloads))
         if oldname in Downloads:
-            print(" # Skipped File (already exists).")
-            continue
+            if filenames[i] + "." + oldname.split(".")[-1] == Downloads[oldname]:
+                print(" # Skipped File (already exists).")
+                continue
 
         # if "Bach" in coursecode:
         downloads[i].click()
 
-        if moveDndFile(oldname, filenames[i] + "." + oldname.split(".")[1], coursecode, courseprefix) != -1:
-            Downloads[oldname] = filenames[i] + "." + oldname.split(".")[1]
+        if moveDndFile(oldname, filenames[i] + "." + oldname.split(".")[-1], coursecode, courseprefix) != -1:
+            Downloads[oldname] = filenames[i] + "." + oldname.split(".")[-1]
             saveDownloadsState()
 
     import threading
@@ -166,6 +164,15 @@ def downloadAllCourseFiles(coursebtn, coursecode, courseprefix):
 def keepScrollUntillFalse(booldict, amount):
     while not booldict['stop']:
         driver.execute_script(f"window.scrollBy(0,{amount});")
+
+
+def fix_filename(filename: str) -> str:  # invalid: NUL, \, /, :, *, ?, ", <, >, |
+    import re
+    filename = re.sub(r"^\s*\d\s*-\s*", "", filename)
+
+    filename = filename.strip().replace("/", "_").replace("\\", "_").replace(":", " - ").replace(
+        "*", "_").replace("?", "_").replace("\"", "_").replace("<", "_").replace(">", "_").replace("|", "_")
+    return filename
 
 
 def moveDndFile(oldfilename, newfilename, coursecode, courseprefix):
