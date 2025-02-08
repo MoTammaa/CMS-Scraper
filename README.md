@@ -72,6 +72,14 @@ pip install -r requirements.txt
 
 To run the script, just run the `CmsScrape.exe` file, or run the Python File, `CmsScrape.py`, in your favourite IDE.
 
+## Building the script to an .exe _(for all versions)_
+
+To build the script to an `.exe` file, you can use the `pyinstaller` package.
+
+```bash
+pyinstaller CmsScrape.spec
+```
+
 ## Notes 📝 _(for Version 2.0)_
 
 -   **All Paths in the `.env` shoud be with forward slashes "/path/to/file" not backslashes.**

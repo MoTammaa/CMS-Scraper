@@ -148,7 +148,7 @@ def downloadAllCourseFiles(session, course, coursecode, courseprefix):
     link_prefix = f"https://{cms}"
     download_links = soup.select(
         'div > div > div > div > div > div > div > div > div > div > div > div > div > a')
-    downloads = [(link.text, f'{link_prefix}{link['href']}')
+    downloads = [(link.text, f"{link_prefix}{link['href']}")
                  for link in download_links if 'href' in link.attrs]
 
     # Find all filenames
@@ -190,7 +190,9 @@ def DownloadFile(session, link, oldname, newname, coursecode, courseprefix, dire
 
     try:
         subject = [
-            folder for folder in directories if coursecode in folder and courseprefix in folder][0]
+            folder for folder in directories
+            if coursecode.lower() in folder.lower() and courseprefix.lower() in folder.lower()
+        ][0]
     except Exception:
         print("CANNOT FIND COURSE Associated")
         subject = courseprefix + " " + coursecode
@@ -276,7 +278,8 @@ PASSWORD=\"\"
 COURSES_DIRECTORY=\"\"
 """)
         print("Created .env file. Please fill in your credentials.")
-        sys.exit()
+        raise FileNotFoundError(
+            "Please fill in your credentials in the .env file.")
 
     # Load environment variables
     load_dotenv('metadata/.env')
@@ -294,5 +297,11 @@ COURSES_DIRECTORY=\"\"
 
 
 if __name__ == "__main__":
-    env__init()
-    check_updates()
+    try:
+        env__init()
+        check_updates()
+    except Exception as e:
+        print("An error occurred:", e)
+        print("Exiting...")
+    # wait for 300 seconds before exiting
+    delay(300)
