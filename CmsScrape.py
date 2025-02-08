@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 import requests
 from bs4 import BeautifulSoup
 import os
@@ -264,23 +265,31 @@ def saveDownloadsState():
 
 
 def env__init():
-    global username, password, CoursesDirectory, DefaultDownloadsInC
-    try:
-        with open('metadata/.env', 'r') as file:
-            Environment_Variables = file.read()
-    except Exception:
+    import sys
+    global username, password, CoursesDirectory
+
+    # Create .env file if it doesn't exist
+    if not os.path.exists('metadata/.env'):
         with open('metadata/.env', 'w') as file:
-            file.write(
-                "[username]\n[password]\n[CoursesDirectory]\n[Default Downloads Folder Path In C: Drive... Example: C:/Users/YourUserName/Downloads]")
-    try:
-        Environment_Variables = Environment_Variables.split('\n')
-        username = Environment_Variables[0]
-        password = Environment_Variables[1]
-        CoursesDirectory = Environment_Variables[2]
-        DefaultDownloadsInC = Environment_Variables[3]
-    except Exception:
-        print("Error in .env file.\n Please make sure to follow the format:\n---------\nusername\npassword\nCoursesDirectory\nDefault Downloads Folder Path In C: Drive... Example: C:/Users/YourUserName/Downloads")
-        import sys
+            file.write("""USERNAME=\"\"
+PASSWORD=\"\"
+COURSES_DIRECTORY=\"\"
+""")
+        print("Created .env file. Please fill in your credentials.")
+        sys.exit()
+
+    # Load environment variables
+    load_dotenv('metadata/.env')
+
+    # Get environment variables
+    username = os.getenv('GUC_USERNAME')
+    password = os.getenv('GUC_PASSWORD')
+    CoursesDirectory = os.getenv('COURSES_DIRECTORY')
+
+    # Validate required environment variables
+    if not all([username, password, CoursesDirectory]):
+        print("Error: Missing required environment variables in .env file.")
+        print("Please make sure to set:\nUSERNAME\nPASSWORD\nCOURSES_DIRECTORY")
         sys.exit()
 
 
