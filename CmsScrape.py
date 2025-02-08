@@ -1,140 +1,167 @@
-# import smtplib
-# from email.mime.multipart import MIMEMultipart
-# from email.mime.text import MIMEText
-from selenium.webdriver.common.by import By
-import time
+import requests
+from bs4 import BeautifulSoup
 import os
-from selenium.webdriver import Edge
-from selenium.webdriver.edge.service import Service
+import time
+import json
+import re
+import shutil
+from requests_ntlm import HttpNtlmAuth
 
-
-driver = None
 # Your login credentials & Variables
 username = ""
 password = ""
-EdgeDriverPath = ""
-Downloads = {}
-scrape_url = ""
-cms = 'cms.guc.edu.eg/apps/student/HomePageStn.aspx'
+cms = 'cms.guc.edu.eg'
+cms_student = f'{cms}/apps/student'
+cms_courses = f'{cms_student}/ViewAllCourseStn'
+course_default_link = f'https://{cms_student}/CourseViewStn.aspx?id=XIDPLACEHOLDER&sid=XSIDPLACEHOLDER'
 CoursesDirectory = ""
 DefaultDownloadsInC = ""
+Downloads = {}
 NewDownloads = {}
+
+# 0 for latest, 1 for previous, 2 for the one before that, etc.
+default_latest_semester = 0
 
 
 def check_updates():
-    global driver, scrape_url, cms
+    global Downloads, NewDownloads
 
     # URL of the login page
-    login_url = f"https://{username}:{password}@{cms}"
+    def login_to_cms():
+        # Start a session
+        session = requests.Session()
 
-    # URL of the page you want to scrape
-    scrape_url = login_url
+        # Set up NTLM authentication
+        auth = HttpNtlmAuth(username, password)
 
-    # Set Edge options to download files to the specified directory
-    # options = EdgeOptions()
-    # options.use_chromium = True
-    # options.add_experimental_option('prefs', {
-    #     "download.default_directory": download_dir,
-    #     "download.prompt_for_download": False,
-    #     "download.directory_upgrade": True,
-    #     "plugins.always_open_pdf_externally": False
-    # })
+        # Step 1: Access the CMS page with NTLM authentication
+        url = f"https://{cms_courses}"
+        try:
+            response = session.get(url, auth=auth)
+            response.raise_for_status()  # Raise an error for bad status codes
+        except requests.exceptions.RequestException as e:
+            print(f"Failed to access the CMS: {e}")
+            return None
 
-    # Initialize the Edge driver
-    service = Service(executable_path=EdgeDriverPath)
-    driver = Edge(service=service)  # ,options=options)
+        # Step 2: Check if login was successful
+        if response.status_code == 200:
+            print("Login successful!")
+            return session
+        else:
+            print(f"Login failed with status code: {response.status_code}")
+            return None
 
-    # Now navigate to the page you're interested in
-    driver.get(scrape_url)
+    session = login_to_cms()
+    if session:
+        # Now you can use the session to access protected pages
+        scrape_url = f"https://{cms_courses}"
+        response = session.get(scrape_url)
+        if response.status_code == 200:
+            print("Successfully accessed the CMS!")
+        else:
+            print("Failed to access the CMS after login")
+        # Now navigate to the page you're interested in
+        scrape_url = f"https://{cms_courses}"
+        response = session.get(scrape_url)
 
-    getCourses()
+        if response.status_code != 200:
+            print("Failed to retrieve the page")
+            return
 
-    delay(120)
-    # Remember to close the driver when finished
-    driver.quit()
+        getCourses(session, response.text)
+    else:
+        print("Login failed")
 
 
-def getCourses():
-    global scrape_url, driver, Downloads, NewDownloads
-
-    delay(1)
+def getCourses(session, html_content):
+    global Downloads, NewDownloads
 
     loadPreviousDownloads()
-    # olddownloads = Downloads.copy()
+    soup: BeautifulSoup = BeautifulSoup(html_content, 'html.parser')
 
-    def updateCoursesLinks():
+    def updateCourseLinks(soup: BeautifulSoup):
+        # Find the table by its ID
+        table = soup.find('table', {
+                          'id': f'ContentPlaceHolderright_ContentPlaceHoldercontent_r1_GridView1_{default_latest_semester}'})
 
-        courses = driver.find_elements(By.XPATH,
-                                       "/html/body/form/div[3]/div[2]/div[2]/div/div/div/div[2]/div[2]/div[1]/div[2]/div[2]/div/div/table/tbody/tr[*]/td[1]/input")
+        if table:
+            # Find all rows in the table body
+            rows = table.find('tbody')
+            if not rows:
+                rows = table.find_all('tr')
+            else:
+                rows = rows.find_all('tr')
 
-        coursecodes = driver.find_elements(By.XPATH,
-                                           "/html/body/form/div[3]/div[2]/div[2]/div/div/div/div[2]/div[2]/div[1]/div[2]/div[2]/div/div/table/tbody/tr[*]/td[2]")
-        return courses, coursecodes
-    # print(coursecodes[2].text)
+            # remove the first row (header)
+            if len(rows) == 0:
+                print("No courses found!")
+                return None, None
+            rows = rows[1:]
+            # Extract the course codes (second <td> in each row)
+            coursecodes = [row.find_all('td')[1].text.strip() for row in rows]
 
-    update = updateCoursesLinks()
-    courses = update[0]
-    coursecodes = update[1]
+            # Extract the course links (fourth <td> in each row)
+            courses_ids = [row.find_all('td')[3].text.strip() for row in rows]
+            # Extract the course links (fifth <td> in each row)
+            course_season_ids = [row.find_all(
+                'td')[4].text.strip() for row in rows]
 
-    from threading import Thread
-    for i in range(0, len(courses)):
-        c = courses[i]
-        crcode = getCode(coursecodes[i].text)
-        courseprefix = getPrefix(coursecodes[i].text)
+            courses_links = [course_default_link.replace('XIDPLACEHOLDER', course_id).replace(
+                'XSIDPLACEHOLDER', course_season_id) for course_id, course_season_id in zip(courses_ids, course_season_ids)]
 
-        booldict = {"stop": False}
-        scrollthread = Thread(
-            target=keepScrollUntillFalse, args=(booldict, 1,))
+            print("Course Links:", courses_links)
+        else:
+            print("Table not found!")
 
-        scrollthread.start()
-        delay(1)
-        booldict['stop'] = True
+        return courses_links, coursecodes
 
-        print("\n\n\n############# ", coursecodes[i].text, "\n")
-        downloadAllCourseFiles(c, crcode, courseprefix)
+    courses, coursecodes = updateCourseLinks(soup)
+
+    for i in range(len(courses)-6):
+        course = courses[i]
+        crcode = getCode(coursecodes[i])
+        courseprefix = getPrefix(coursecodes[i])
+
+        print("\n\n\n############# ", coursecodes[i], "\n")
+        downloadAllCourseFiles(session, course, crcode, courseprefix)
         saveDownloadsState()
-        driver.get(scrape_url)
 
-        update = updateCoursesLinks()
-        courses = update[0]
-        coursecodes = update[1]
     with open("lastrunsummary.txt", "w") as f:
         print("\n\n Summary - Downloaded: \n")
         f.write("\n\n Summary - Downloaded: \n")
 
         for key in NewDownloads:
-            # if key not in olddownloads:
             print("*-", NewDownloads[key])
             f.write("*- " + NewDownloads[key] + "\n")
         print("\n.....\n\nDone!")
         f.write("\n.....\n\nDone!")
 
 
-def downloadAllCourseFiles(coursebtn, coursecode, courseprefix):
-    global Downloads, NewDownloads, driver
-    coursebtn.click()
+def downloadAllCourseFiles(session, course, coursecode, courseprefix):
+    global Downloads, NewDownloads
 
-    downloads = driver.find_elements(By.XPATH,
-                                     "/html/body/form/div[3]/div[2]/div[2]/div/div/div/div[2]/div[*]/div[2]/div[3]/div[*]/div/div[3]/div[1]/a")
+    response = session.get(course)
+    soup = BeautifulSoup(response.text, 'html.parser')
 
-    filenames = driver.find_elements(By.XPATH,
-                                     "/html/body/form/div[3]/div[2]/div[2]/div/div/div/div[2]/div[*]/div[2]/div[3]/div[*]/div/div[1]/strong")
-    # if len(downloads) > 0:
-    #     for d in downloads:
-    #         print(d.text)
-    #     print('-------------')
-    #     return True
+    # Find all download links
+    link_prefix = f"https://{cms}"
+    download_links = soup.select(
+        'div > div > div > div > div > div > div > div > div > div > div > div > div > a')
+    downloads = [(link.text, f'{link_prefix}{link['href']}')
+                 for link in download_links if 'href' in link.attrs]
 
-    for i in range(0, len(filenames)):
-        filenames[i] = fix_filename(filenames[i].text)
+    # Find all filenames
+    filename_elements = soup.select(
+        'div > div > div > div > div > div > div > div > div > div > div > div > strong')
+    filenames = [element.text.strip() for element in filename_elements]
 
-    # link = downloads[0].get_attribute('href')
+    for i in range(len(filenames)):
+        filenames[i] = fix_filename(filenames[i])
 
-    # download course files:
-    for i in range(0, len(downloads)):
-        if "Download" not in downloads[i].text:
+    for i in range(len(downloads)):
+        if "download" not in str(downloads[i][0]).lower():
             continue
-        link = downloads[i].get_attribute('href')
+        link = downloads[i][1]
         oldname = link.split("/")[-1]
 
         print("downloading files ", (i+1), "/", len(downloads))
@@ -143,52 +170,19 @@ def downloadAllCourseFiles(coursebtn, coursecode, courseprefix):
                 print(" # Skipped File (already exists).")
                 continue
 
-        # if "Bach" in coursecode:
-        downloads[i].click()
-
-        if moveDndFile(oldname, filenames[i] + "." + oldname.split(".")[-1], coursecode, courseprefix) != -1:
-            Downloads[oldname] = filenames[i] + "." + oldname.split(".")[-1]
-            saveDownloadsState()
-        NewDownloads[oldname] = courseprefix + coursecode + \
-            "-> " + filenames[i] + "." + oldname.split(".")[-1]
-
-    import threading
-
-    booldict = {"stop": False}
-    scrollthread = threading.Thread(
-        target=keepScrollUntillFalse, args=(booldict, 10,))
-
-    scrollthread.start()
-    delay(1)
-    booldict['stop'] = True
-    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        if DownloadFile(session, link, oldname, filenames[i] + "." + oldname.split(".")[-1], coursecode, courseprefix, CoursesDirectory):
+            continue
+        print("Failed to download file: ", filenames[i])
 
 
-def keepScrollUntillFalse(booldict, amount):
-    while not booldict['stop']:
-        driver.execute_script(f"window.scrollBy(0,{amount});")
-
-
-def fix_filename(filename: str) -> str:  # invalid: NUL, \, /, :, *, ?, ", <, >, |
-    import re
+def fix_filename(filename: str) -> str:
     filename = re.sub(r"^\s*\d\s*-\s*", "", filename)
-
     filename = filename.strip().replace("/", "_").replace("\\", "_").replace(":", " - ").replace(
         "*", "_").replace("?", "_").replace("\"", "_").replace("<", "_").replace(">", "_").replace("|", "_")
     return filename
 
 
-def moveDndFile(oldfilename, newfilename, coursecode, courseprefix):
-    import shutil
-
-    directory = CoursesDirectory
-
-# =============================================================================
-#   if "Bach" not in coursecode:
-#       return 0
-# =============================================================================
-
-    # get all files and folders' names in the directory
+def DownloadFile(session, link, oldname, newname, coursecode, courseprefix, directory):
     filenames = os.listdir(directory)
     directories = [filename for filename in filenames if os.path.isdir(
         os.path.join(directory, filename))]
@@ -200,40 +194,46 @@ def moveDndFile(oldfilename, newfilename, coursecode, courseprefix):
         print("CANNOT FIND COURSE Associated")
         subject = courseprefix + " " + coursecode
         os.makedirs(os.path.join(directory, subject))
-        # return -1
 
-    print("Waiting for file downloading...", end="")
+    course_folder = os.path.join(directory, subject)
+    file_path = os.path.join(course_folder, newname)
 
-    while (True):
-        delay(1)
-        try:
-            shutil.move(f"{DefaultDownloadsInC}/{oldfilename}",
-                        f"{CoursesDirectory}/{subject}/{newfilename}")
-            print("\nDownloaded Successfully!")
-            return True
-        except Exception:
-            print(".", end="")
+    # Download the file directly into the course folder
+    response = session.get(link, stream=True)
+    if response.status_code == 200:
+        with open(file_path, 'wb') as file:
+            for chunk in response.iter_content(chunk_size=8192):
+                file.write(chunk)
+        print(f"Downloaded: {newname} -> {file_path}")
+
+        # Update Downloads and NewDownloads
+        Downloads[oldname] = newname
+        saveDownloadsState()
+        NewDownloads[oldname] = f"{courseprefix} {coursecode} -> {newname}"
+        return True
+    else:
+        print(
+            f"Failed to download: {newname} (Status Code: {response.status_code})")
+        return False
 
 
 def getCode(coursename):
     if "Bachelor" in coursename:
         return "Bachelor"
     if "|" not in coursename:
-        return "Others"
+        return coursename
 
-    possible = coursename.split("|")[1]  # ex. (|CSEN603|)Whatever Subject)
-    import re
+    possible = coursename.split("|")[1]
     return re.sub('[^0-9]', '', possible)
 
 
-def getPrefix(coursename):  # CSEN, DMET, etc
+def getPrefix(coursename):
     if "Bachelor" in coursename:
         return "Bachelor"
     if "|" not in coursename:
         return "Others"
 
-    possible = coursename.split("|")[1]  # ex. (|CSEN603|)Whatever Subject)
-    import re
+    possible = coursename.split("|")[1]
     return re.sub('[0-9]', '', possible)
 
 
@@ -243,7 +243,6 @@ def delay(seconds):
 
 def loadPreviousDownloads():
     global Downloads
-    import json
     try:
         with open("metadata/downloads.json") as f:
             try:
@@ -257,70 +256,34 @@ def loadPreviousDownloads():
     if Downloads == None:
         Downloads = {}
 
-    # print(Downloads)
-
 
 def saveDownloadsState():
     global Downloads
-    import json
     with open("metadata/downloads.json", "w") as f:
         json.dump(Downloads, f)
 
 
 def env__init():
-    global username, password, EdgeDriverPath, CoursesDirectory, DefaultDownloadsInC
+    global username, password, CoursesDirectory, DefaultDownloadsInC
     try:
         with open('metadata/.env', 'r') as file:
             Environment_Variables = file.read()
     except Exception:
-        # create .env file
         with open('metadata/.env', 'w') as file:
-            file.write("[username]\n[password]\n[EdgeDriverPath]\n[CoursesDirectory]\n[Default Downloads Folder Path In C: Drive... Example: C:/Users/YourUserName/Downloads]")
+            file.write(
+                "[username]\n[password]\n[CoursesDirectory]\n[Default Downloads Folder Path In C: Drive... Example: C:/Users/YourUserName/Downloads]")
     try:
         Environment_Variables = Environment_Variables.split('\n')
         username = Environment_Variables[0]
         password = Environment_Variables[1]
-        EdgeDriverPath = Environment_Variables[2]
-        CoursesDirectory = Environment_Variables[3]
-        DefaultDownloadsInC = Environment_Variables[4]
+        CoursesDirectory = Environment_Variables[2]
+        DefaultDownloadsInC = Environment_Variables[3]
     except Exception:
-        print("Error in .env file.\n Please make sure to follow the format:\n---------\nusername\npassword\nEdgeDriverPath\nCoursesDirectory\nDefault Downloads Folder Path In C: Drive... Example: C:/Users/YourUserName/Downloads")
+        print("Error in .env file.\n Please make sure to follow the format:\n---------\nusername\npassword\nCoursesDirectory\nDefault Downloads Folder Path In C: Drive... Example: C:/Users/YourUserName/Downloads")
         import sys
         sys.exit()
 
 
-# =============================================================================
-# def send_email(notifications):
-#     # Set up your email server
-#     server = smtplib.SMTP('smtp.office365.com', 587)
-#     server.starttls()
-#
-#     # Your email credentials
-#     email_username = 'your_email_username'
-#     email_password = 'your_email_password'
-#
-#     server.login(email_username, email_password)
-#
-#     # Set up your message
-#     msg = MIMEMultipart()
-#     msg['From'] = email_username
-#     msg['To'] = 'recipient@example.com'
-#     msg['Subject'] = 'New notifications from university portal'
-#
-#     body = '\n'.join(notification.text for notification in notifications)
-#
-#     msg.attach(MIMEText(body, 'plain'))
-#
-#     text = msg.as_string()
-#
-#     server.sendmail(email_username, 'recipient@example.com', text)
-# =============================================================================
-
-
-def main():
+if __name__ == "__main__":
     env__init()
     check_updates()
-
-
-if __name__ == '__main__':
-    main()
