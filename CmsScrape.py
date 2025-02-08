@@ -118,7 +118,7 @@ def getCourses(session, html_content):
 
     courses, coursecodes = updateCourseLinks(soup)
 
-    for i in range(len(courses)-6):
+    for i in range(len(courses)):
         course = courses[i]
         crcode = getCode(coursecodes[i])
         courseprefix = getPrefix(coursecodes[i])
